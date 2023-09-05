@@ -1,3 +1,18 @@
+##---------------------|--------------------------------------------------------------|
+## Author:             | Shad0w-Ops                                                   |
+##---------------------|--------------------------------------------------------------|
+## script name:        | Tchat Server                                                 |
+##---------------------|--------------------------------------------------------------|
+## Date of creation:   | 3/9/2023                                                     |
+##---------------------|--------------------------------------------------------------|
+## purpose:            | A simple yet effective terminal based chatting script        |
+##                     | made with integrated portforwarding using ngrok and          |
+##                     | end-to-end encryption using the fernet encryption algorythm. | 
+##---------------------|--------------------------------------------------------------|
+## Tested on:          | Kali Linux  : Terminator                                     |
+##---------------------|--------------------------------------------------------------|
+
+#importing libraries
 import socket
 import threading
 import os
@@ -18,10 +33,12 @@ BANNER = '''
                                                        
 '''
 
+#-----------------------Defining Functions-------------------------#
+
 # Function to generate a secure random password
 def generate_password():
     characters = string.ascii_letters + string.digits
-    return ''.join(random.choice(characters) for _ in range(10))
+    return ''.join(random.choice(characters) for _ in range(10)) #generates a 10 character random password
 
 # Function to generate a Fernet key
 def generate_fernet_key():
@@ -44,7 +61,7 @@ def start_ngrok(port):
 def handle_client(client_socket, nickname):
     while True:
         try:
-            message = client_socket.recv(1024).decode('utf-8')
+            message = client_socket.recv(1024).decode('utf-8') # Decode UTF-8 encoded incoming messages
             if not message:
                 break
             print(f"{nickname}: {message}")
@@ -60,11 +77,13 @@ def broadcast(message, sender_socket):
     for client in clients:
         if client != sender_socket:
             try:
-                client.send(message.encode('utf-8'))
+                client.send(message.encode('utf-8')) # UTF-8 encode before broadcasting messages to clients
             except Exception as e:
                 print(f"An error occurred while broadcasting: {str(e)}")
                 client.close()
                 clients.remove(client)
+
+#----------------------Server-Initialization-----------------------#
 
 if __name__ == "__main__":
     # Server configuration
@@ -73,7 +92,7 @@ if __name__ == "__main__":
 
     characters = string.printable
 
-    # Generate a random 5-character word for the password
+    # Generate a random 10-character word for the password
     password = generate_password()
 
     # Generate a Fernet key
@@ -99,7 +118,7 @@ if __name__ == "__main__":
     print(colored(message, 'green'))  # Print in green
     print("=" * message_length)
 
-    clients = []
+    clients = [] # Keep a list of connected clients to broadcast to
 
     try:
         while True:
@@ -137,3 +156,5 @@ if __name__ == "__main__":
         for client in clients:
             client.close()
         server.close()
+
+#---------------------------Script-End-----------------------------#
