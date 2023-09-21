@@ -86,16 +86,11 @@ def broadcast(message, sender_socket):
 #----------------------Server-Initialization-----------------------#
 
 if __name__ == "__main__":
-    # Server configuration
     host = "0.0.0.0"
     port = int(generate_portnumber())
 
     characters = string.printable
-
-    # Generate a random 10-character word for the password
     password = generate_password()
-
-    # Generate a Fernet key
     fernet_key = generate_fernet_key()
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -103,41 +98,36 @@ if __name__ == "__main__":
     server.listen(5)
 
     os.system("clear")
-    print(colored(BANNER, 'red'))  # Print the banner in red
+    print(colored(BANNER, 'red'))
 
     start_ngrok(port)
 
     passwd = "[*] Password for server is: " + password
-    print(colored(passwd, 'green'))  # Print in green
+    print(colored(passwd, 'green'))
 
-    # Print the Fernet key in green
     print(colored(f"[*] Fernet Key: {fernet_key}", 'green'))
 
     message = f"[*] Server is listening on {host}:{port}"
     message_length = len(message)
-    print(colored(message, 'green'))  # Print in green
+    print(colored(message, 'green'))
     print("=" * message_length)
 
-    clients = [] # Keep a list of connected clients to broadcast to
+    clients = []
 
     try:
         while True:
             client_socket, client_address = server.accept()
             ack = f"[*] Accepted connection from {client_address[0]}:{client_address[1]}"
-            print(colored(ack, 'green'))  # Print in green
+            print(colored(ack, 'green'))
 
-            # Receive password from client
             received_password = client_socket.recv(1024).decode('utf-8')
 
-            # Check if the received password matches the expected password
             if received_password != password:
                 print(f"Invalid password from {client_address[0]}:{client_address[1]}")
                 client_socket.close()
             else:
-                # Password is correct, send "valid" response to the client
                 client_socket.send("valid".encode('utf-8'))
 
-                # Receive the nickname from the client
                 nickname = client_socket.recv(1024).decode('utf-8')
                 clients.append(client_socket)
 
@@ -149,12 +139,10 @@ if __name__ == "__main__":
                 client_thread = threading.Thread(target=handle_client, args=(client_socket, nickname))
                 client_thread.start()
     except KeyboardInterrupt:
-        print(colored("Server Terminated", 'red'))  # Print in red when Ctrl+C is pressed
+        print(colored("Server Terminated", 'red'))
     except Exception as e:
         print(f"An error occurred: {str(e)}")
     finally:
         for client in clients:
             client.close()
         server.close()
-
-#---------------------------Script-End-----------------------------#

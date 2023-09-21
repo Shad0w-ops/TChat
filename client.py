@@ -20,6 +20,8 @@ from termcolor import colored
 from cryptography.fernet import Fernet
 import re
 import datetime
+import socks
+import socket
 
 
 #-------------------------Defining-Class---------------------------#
@@ -121,71 +123,70 @@ class ChatClient:
 
 #------------------------------------------------------------------#
 
-    def start(self):            # Function to start script
+    def start(self):
         os.system("clear")
-        print(f"\033[91m{self.BANNER}\033[0m")  # Print banner 
-
+        print(f"\033[91m{self.BANNER}\033[0m")
+        
         try:
-            address_input = input("Enter the server address(address:port): ")     # Server address input in format (address:port)
+            address_input = input("Enter the server address (address:port): ")
         except KeyboardInterrupt:
-            print(colored("Client Terminated", 'red'))                            # If user hits CTRL+c Client Terminated will be printed in red
+            print(colored("Client Terminated", 'red'))
             exit()
 
-        address_parts = address_input.split(':')                                  # Split Address : Port to take each one seperately 
-
-        if len(address_parts) != 2:                                               # User Input validation for incorrect server and port input
+        address_parts = address_input.split(':')
+        if len(address_parts) != 2:
             print("Invalid address format. Please provide in the format 'hostname:port'.")
         else:
             host = address_parts[0]
             port = int(address_parts[1])
 
             try:
-                password = input("Enter the server password: ")                    # Server access password input
+                password = input("Enter the server password: ")
             except KeyboardInterrupt:
-                print(colored("Client Terminated", 'red'))                         # If user hits CTRL+c Client Terminated will be printed in red
+                print(colored("Client Terminated", 'red'))
+                self.client_socket.close()
                 exit()
 
-            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket.set_proxy(socks.SOCKS5, '127.0.0.1', 9050)  # Set Tor SOCKS proxy
             self.client_socket.connect((host, port))
 
             os.system("clear")
-            print(f"\033[91m{self.BANNER}\033[0m")                                 # Print banner
+            print(f"\033[91m{self.BANNER}\033[0m")
 
-            self.client_socket.send(password.encode('utf-8'))                      # Encode password and send to server
-            password_ack = self.client_socket.recv(1024).decode('utf-8')           # password acknolegment variable
+            self.client_socket.send(password.encode('utf-8'))
+            password_ack = self.client_socket.recv(1024).decode('utf-8')
 
-            if password_ack == "valid":                                            # If server password was correct proceed to next section of code
+            if password_ack == "valid":
                 try:
-                    self.nickname = input("Access Granted. \nPlease enter your nickname: ")  # User nickname input
+                    self.nickname = input("Access Granted. \nPlease enter your nickname: ")
                 except KeyboardInterrupt:
-                    print(colored("Client Terminated", 'red'))                     # If user hits CTRL+c Client Terminated will be printed in red
+                    print(colored("Client Terminated", 'red'))
                     self.client_socket.close()
                     exit()
 
-                self.input_fernet_key()                                            # Input Fernet secret key provided by server to allow end-to-end encryption
+                self.input_fernet_key()
 
                 os.system("clear")
 
-                print(f"\033[91m{self.BANNER}\033[0m")                             # Print banner
-                ack = self.nickname + " joined the chat."                          
-                print(f"\033[92m{ack}\033[0m")                                     # Prints user joined chat
+                print(f"\033[91m{self.BANNER}\033[0m")
+                ack = self.nickname + " joined the chat."
+                print(f"\033[92m{ack}\033[0m")
 
                 print("-------------------------")
 
-                self.client_socket.send(self.nickname.encode('utf-8'))             # Send nickname to server to broadcast to other clients that this nickname joined the chat
+                receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
+                send_thread = threading.Thread(target=self.send_messages, daemon=True)
 
-                receive_thread = threading.Thread(target=self.receive_messages, daemon=True)  # Creating message recieve thread
-                send_thread = threading.Thread(target=self.send_messages, daemon=True)        # Creating message sending thread
-
-                receive_thread.start()                                             # Start threads
-                send_thread.start()                                                # Start threads
+                receive_thread.start()
+                send_thread.start()
 
                 try:
                     send_thread.join()
                 except KeyboardInterrupt:
-                    print(colored("Client Terminated", 'red'))                     # If user hits CTRL+c Client Terminated will be printed in red
+                    print(colored("Client Terminated", 'red'))
                     self.client_socket.close()
 
 if __name__ == "__main__":
-    chat_client = ChatClient()  # Create and initialize the chat client
-    chat_client.start()         # Start the chat client's functionality
+    chat_client = ChatClient()
+    chat_client.start()
