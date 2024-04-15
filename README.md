@@ -17,15 +17,15 @@ Tchat is a simple yet effective terminal-based chatting script made with integra
 
   Clone the repository:
   
-  git clone https://github.com/yourusername/tchat.git
+    git clone https://github.com/yourusername/tchat.git
    
   Navigate to the TChat directory:
   
-  cd tchat/server
+    cd tchat/server
 
   Install the requirements:
   
-  pip3 install -r requirements.txt
+    pip3 install -r requirements.txt
 
 ## Usage
 
