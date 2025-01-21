@@ -1,60 +1,74 @@
-# Tchat Server and Client
-
 ![Screenshot_2023-09-06_08-00-53](https://github.com/Shad0w-ops/TChat/assets/43708460/2113c837-bf01-4b07-8aef-ab4bbc443ade)
 
-Tchat is a simple yet effective terminal-based chatting script made with integrated port forwarding using ngrok and end-to-end encryption using the Fernet encryption algorithm.
+# TChat Server and Client
+
+**TChat** is a simple TUI chat client (and server) with end-to-end encryption using AES-SHA512 and automatically routes the traffic through tor for increased anonymity and security.
 
 ## Features
 
 - Terminal-based chat server and client.
-- Integrated port forwarding using ngrok for easy external access.
-- End-to-end encryption using the Fernet encryption algorithm.
+- ~~Integrated port forwarding using ngrok for easy external access.~~
+- Automatically routes traffic through tor for increased anonymity and security.
+- End-to-end encryption using the AES-SHA512.
 - Password protection for server access.
 - User-friendly and customizable.
+- Vim motions while in the message area (you can enter it by pressing "escape").
+
+## TODO
+
+- [ ] Automatically-generate onion links for external access and increased security (using stem or another tor library).
+- [ ] Add support for more vim functionality (e.g. search, yank, etc).
+- [ ] Add a WebUI implementation.
 
 ## Installation
 
+Clone the repository:
+```bash
+git clone https://github.com/Shad0w-ops/TChat.git
+```
 
-  Clone the repository:
-  
-    git clone https://github.com/yourusername/tchat.git
-   
-  Navigate to the TChat directory:
-  
-    cd tchat/server
+Navigate to the TChat directory:
+```bash
+cd TChat
+```
 
-  Install the requirements:
-  
-    pip3 install -r requirements.txt
+Install the requirements (we recommend using uv for easy python package management):
+```bash
+uv sync
+```
+
+You can still install dependencies normally using pip:
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 
-  First you need to start the TChat server:
-  ```bash
-  python3 server.py
-  ```
-  
-![Screenshot_2023-09-06_07-07-43](https://github.com/Shad0w-ops/TChat/assets/43708460/f49f4df9-dfd3-4434-a156-7512e9c62a87)
+First you need to start the TChat server (using uv):
+```bash
+uv run server.py
+```
 
-This will generate a random ngrok address, local port, password and fernet secret key.
+or with python:
 
-now you and your friends are ready to start chatting :)
+```bash
+python server.py
+```
 
-on a different terminal, run the client script.
+In a different terminal, run the client script (using uv).
 
-![Screenshot_2023-09-06_07-42-51](https://github.com/Shad0w-ops/TChat/assets/43708460/49acf8e2-2bf8-478c-9db6-d2c644f132b9)
+```bash
+uv run client.py
+```
 
-it will ask you for the server address and port, make sure to use it without tcp://
-then paste the server password.
+or with python:
 
-it will then ask you for a nickname and the fernet key
+```bash
+python client.py
+```
 
-for the nickname you can use any name/alias that you want to go by in that chat
+It will ask you for the server address, then for the server password.
 
-for the fernet key, make sure to copy and paste it from the server and inclue the "=" in the end example "uwvOTbNmHofe1vA41Qlox3lbNgL0qFlFyhaAAAaSi6o="
-
-and now you are ready to chat with your friends, just give them the credentials from the server but make sure to send it to them in a secure manner.
+You will then be prompted to enter your chosen nickname.
 
 Enjoy chatting 😊
-
-  

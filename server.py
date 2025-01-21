@@ -1,160 +1,282 @@
 ##---------------------|--------------------------------------------------------------|
-## Author:             | Shad0w-Ops                                                   |
+## Authors:            | Shad0w-Ops, UX0l0l                                           |
 ##---------------------|--------------------------------------------------------------|
-## script name:        | Tchat Server                                                 |
+## script name:        | TChat Server                                                 |
 ##---------------------|--------------------------------------------------------------|
 ## Date of creation:   | 3/9/2023                                                     |
 ##---------------------|--------------------------------------------------------------|
-## purpose:            | A simple yet effective terminal based chatting script        |
-##                     | made with integrated portforwarding using ngrok and          |
-##                     | end-to-end encryption using the fernet encryption algorythm. | 
-##---------------------|--------------------------------------------------------------|
-## Tested on:          | Kali Linux  : Terminator                                     |
-##---------------------|--------------------------------------------------------------|
 
-#importing libraries
+
 import socket
-import threading
 import os
-from pyngrok import ngrok
 import random
 import string
-from termcolor import colored
-from cryptography.fernet import Fernet
+import threading
+import subprocess
+import asyncio
+import signal
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-# Constants
-BANNER = '''
-  ______     __          __     _____                          
- /_  __/____/ /_  ____ _/ /_   / ___/___  ______   _____  _____
-  / / / ___/ __ \/ __ `/ __/   \__ \/ _ \/ ___/ | / / _ \/ ___/
- / / / /__/ / / / /_/ / /_    ___/ /  __/ /   | |/ /  __/ /    
-/_/  \___/_/ /_/\__,_/\__/   /____/\___/_/    |___/\___/_/     
---------------------------v1.1---------------------------   
-                                                       
-'''
+# Global set to track active nicknames
+active_nicknames = set()
 
-#-----------------------Defining Functions-------------------------#
 
-# Function to generate a secure random password
-def generate_password():
-    characters = string.ascii_letters + string.digits
-    return ''.join(random.choice(characters) for _ in range(10)) #generates a 10 character random password
+def remove_nickname(nickname: str) -> None:
+    """Remove a nickname from the active set."""
+    if nickname in active_nicknames:
+        active_nicknames.remove(nickname)
 
-# Function to generate a Fernet key
-def generate_fernet_key():
-    return Fernet.generate_key().decode()
 
-# Function to generate a random port number
-def generate_portnumber():
-    return str(random.randint(1024, 65535))
+def clear() -> None:
+    subprocess.run("cls" if os.name == "nt" else "clear", shell=True)
 
-# Function to start Ngrok and expose the server
-def start_ngrok(port):
-    ngrok_tunnel = ngrok.connect(port, "tcp")
-    
-    starts = "[*] Server has been initiated."
-    print(colored(starts, 'green'))
 
-    print(f"\033[92m[*] Ngrok tunnel URL: {ngrok_tunnel.public_url}\033[0m")
+def generate_encryption_key() -> str:
+    """Generate a secure encryption key using PBKDF2."""
+    salt = os.urandom(32)
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA512(),
+        length=32,
+        salt=salt,
+        iterations=200000,
+        backend=default_backend(),
+    )
+    return kdf.derive(os.urandom(64)).hex()
 
-# Function to handle client connections
-def handle_client(client_socket, nickname):
+
+def encrypt_message(message: bytes, key: str) -> bytes:
+    """Encrypt message using AES."""
+    try:
+        cipher = Cipher(
+            algorithms.AES(bytes.fromhex(key)),
+            modes.CFB(b"\0" * 16),
+            backend=default_backend(),
+        )
+        encryptor = cipher.encryptor()
+        return encryptor.update(message)
+    except Exception as exc:
+        print(f"Encryption error: {exc}")
+        return message
+
+
+def receive_all(sock: socket.socket) -> bytes:
+    """Receive entire message from socket, ignoring keepalive packets."""
+    chunks = []
     while True:
-        try:
-            message = client_socket.recv(1024).decode('utf-8') # Decode UTF-8 encoded incoming messages
-            if not message:
-                break
-            print(f"{nickname}: {message}")
-            broadcast(f"{nickname}: {message}", client_socket)
-        except Exception as e:
-            print(f"An error occurred while handling client: {str(e)}")
+        chunk = sock.recv(8192)
+        if not chunk:
             break
-    print(colored(f"{nickname} left the chat", 'red'))  # Print when a client leaves
-    broadcast(colored(f"{nickname} left the chat", 'red'), client_socket)  # Broadcast when a client leaves
+        if chunk == b"\x00":
+            continue
+        chunks.append(chunk)
+        if len(chunk) < 8192:
+            break
+    return b"".join(chunks)
 
-# Function to broadcast messages to all clients
-def broadcast(message, sender_socket):
-    for client in clients:
-        if client != sender_socket:
-            try:
-                client.send(message.encode('utf-8')) # UTF-8 encode before broadcasting messages to clients
-            except Exception as e:
-                print(f"An error occurred while broadcasting: {str(e)}")
-                client.close()
-                clients.remove(client)
 
-#----------------------Server-Initialization-----------------------#
-
-if __name__ == "__main__":
-    # Server configuration
-    host = "0.0.0.0"
-    port = int(generate_portnumber())
-
-    characters = string.printable
-
-    # Generate a random 10-character word for the password
-    password = generate_password()
-
-    # Generate a Fernet key
-    fernet_key = generate_fernet_key()
-
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((host, port))
-    server.listen(5)
-
-    os.system("clear")
-    print(colored(BANNER, 'red'))  # Print the banner in red
-
-    start_ngrok(port)
-
-    passwd = "[*] Password for server is: " + password
-    print(colored(passwd, 'green'))  # Print in green
-
-    # Print the Fernet key in green
-    print(colored(f"[*] Fernet Key: {fernet_key}", 'green'))
-
-    message = f"[*] Server is listening on {host}:{port}"
-    message_length = len(message)
-    print(colored(message, 'green'))  # Print in green
-    print("=" * message_length)
-
-    clients = [] # Keep a list of connected clients to broadcast to
-
+def handle_client(client_socket: socket.socket, nickname: str, clients: dict) -> None:
+    """Handle incoming messages from a specific client."""
     try:
         while True:
-            client_socket, client_address = server.accept()
-            ack = f"[*] Accepted connection from {client_address[0]}:{client_address[1]}"
-            print(colored(ack, 'green'))  # Print in green
+            encrypted_message = receive_all(client_socket)
+            if not encrypted_message:
+                break
 
-            # Receive password from client
-            received_password = client_socket.recv(1024).decode('utf-8')
+            # Format message with nickname prefix
+            formatted_message = f"{nickname}: ".encode("utf-8") + encrypted_message
+            broadcast(formatted_message, client_socket, clients)
 
-            # Check if the received password matches the expected password
-            if received_password != password:
-                print(f"Invalid password from {client_address[0]}:{client_address[1]}")
-                client_socket.close()
-            else:
-                # Password is correct, send "valid" response to the client
-                client_socket.send("valid".encode('utf-8'))
+    except BrokenPipeError:
+        remove_nickname(nickname)
+        if client_socket in clients:
+            clients.remove(client_socket)
+        clear()
+    except (ConnectionError, OSError) as e:
+        print(f"Connection error with {nickname}: {e}")
+    finally:
+        broadcast(
+            f"{nickname} left the chat.".encode("utf-8"),
+            client_socket,
+            clients,
+        )
+        if client_socket in clients:
+            clients.remove(client_socket)
+        remove_nickname(nickname)
+        client_socket.close()
 
-                # Receive the nickname from the client
-                nickname = client_socket.recv(1024).decode('utf-8')
-                clients.append(client_socket)
 
-                print(f"Nickname for {client_address[0]}:{client_address[1]} is {nickname}")
+def broadcast(message: bytes, sender_socket: socket.socket, clients: list) -> None:
+    """Send a message to all connected clients including the sender."""
+    # First send message length, then the message
+    msg_length = len(message).to_bytes(4, "big")
 
-                colored_message = f"{nickname} joined the chat."
-                broadcast(colored_message, client_socket)
+    for client in clients[:]:  # Copy list to avoid modification while iterating
+        try:
+            client.sendall(msg_length)
+            client.sendall(message)
+        except BrokenPipeError:
+            client.close()
+            if client in clients:
+                clients.remove(client)
+        except (ConnectionError, OSError) as e:
+            print(f"Failed to send to client: {e}")
+            client.close()
+            if client in clients:
+                clients.remove(client)
 
-                client_thread = threading.Thread(target=handle_client, args=(client_socket, nickname))
-                client_thread.start()
-    except KeyboardInterrupt:
-        print(colored("Server Terminated", 'red'))  # Print in red when Ctrl+C is pressed
+
+async def handle_connections(
+    server: socket.socket,
+    password: str,
+    clients: list,
+    encryption_key: str,
+    clients_lock: threading.Lock,
+) -> None:
+    loop = asyncio.get_event_loop()
+    while True:
+        try:
+            client_socket, client_address = await loop.sock_accept(server)
+            client_socket.settimeout(30)
+
+            # Handle each new client in a separate task
+            asyncio.create_task(
+                handle_new_client(
+                    client_socket,
+                    client_address,
+                    password,
+                    clients,
+                    encryption_key,
+                    clients_lock,
+                )
+            )
+
+        except (socket.error, ValueError) as e:
+            print(f"Connection error: {e}")
+            continue
+
+
+async def handle_new_client(
+    client_socket: socket.socket,
+    client_address: tuple,
+    password: str,
+    clients: list,
+    encryption_key: str,
+    clients_lock: threading.Lock,
+) -> None:
+    try:
+        received_password = receive_all(client_socket).decode("utf-8", errors="ignore")
+
+        if received_password != password:
+            client_socket.close()
+            return
+
+        client_socket.sendall(f"valid:{encryption_key}".encode("utf-8"))
+
+        # Nickname validation loop
+        while True:
+            try:
+                nickname = (
+                    client_socket.recv(1024).decode("utf-8", errors="ignore").strip()
+                )
+
+                with clients_lock:
+                    if not nickname:
+                        client_socket.sendall(b"nickname_taken")
+                        continue
+
+                    if nickname not in active_nicknames:
+                        active_nicknames.add(nickname)
+                        clients.append(client_socket)
+                        client_socket.sendall(b"nickname_accepted\n")
+                        break
+                    else:
+                        client_socket.sendall(b"nickname_taken")
+            except BrokenPipeError:
+                pass
+            except Exception as e:
+                print(f"Error in nickname validation: {e}")
+                return
+
+        # Send join message separately from nickname acceptance
+        broadcast(
+            f"{nickname} joined the chat.".encode("utf-8"),
+            client_socket,
+            clients,
+        )
+
+        # Handle client messages in a separate thread
+        client_thread = threading.Thread(
+            target=handle_client, args=(client_socket, nickname, clients)
+        )
+        client_thread.daemon = True
+        client_thread.start()
+
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        print(f"Error handling new client: {e}")
+        client_socket.close()
+
+
+def signal_handler(sig, frame):
+    for nickname in active_nicknames.copy():
+        remove_nickname(nickname)
+    os._exit(0)
+
+
+async def main():
+    clear()
+    global active_nicknames
+
+    # Set up signal handler
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    clients_lock = threading.Lock()
+
+    host = "0.0.0.0"
+    port = 9999
+    password = "".join(
+        random.SystemRandom().choice(
+            string.ascii_letters + string.digits + string.punctuation
+        )
+        for _ in range(16)
+    )
+    encryption_key = generate_encryption_key()
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((host, port))
+    server.listen(10)
+    server.setblocking(False)
+
+    print(f"[*] Password for server is: {password}")
+
+    print(f"[*] Server is listening on {host}:{port}")
+
+    clients = []
+    try:
+        await handle_connections(
+            server, password, clients, encryption_key, clients_lock
+        )
+    except KeyboardInterrupt:
+        for client in clients:
+            try:
+                client.sendall(b"Server shutting down...")
+                client.close()
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"Fatal error: {e}")
     finally:
         for client in clients:
-            client.close()
+            try:
+                client.close()
+            except Exception:
+                pass
         server.close()
 
-#---------------------------Script-End-----------------------------#
+
+if __name__ == "__main__":
+    asyncio.run(main())
